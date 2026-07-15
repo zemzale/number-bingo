@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Ball = {
   value: number;
@@ -60,15 +60,34 @@ function makeDeck() {
   );
 }
 
+function makeOrderedDeck() {
+  return Array.from({ length: 75 }, (_, index) => makeBall(index + 1));
+}
+
 function makeCard() {
-  const card = columns.flatMap(({ min, max }) =>
-    shuffle(Array.from({ length: max - min + 1 }, (_, index) => min + index)).slice(
-      0,
-      5
-    )
+  const columnValues = columns.map(({ min, max }) =>
+    shuffle(
+      Array.from({ length: max - min + 1 }, (_, index) => min + index)
+    ).slice(0, 5)
+  );
+  const card = Array.from(
+    { length: 25 },
+    (_, index) => columnValues[index % 5][Math.floor(index / 5)]
   );
 
   card[12] = 0;
+  return card;
+}
+
+function makeStarterCard() {
+  const card = [
+    1, 16, 31, 46, 61,
+    2, 17, 32, 47, 62,
+    3, 18, 0, 48, 63,
+    4, 19, 34, 49, 64,
+    5, 20, 35, 50, 65
+  ];
+
   return card;
 }
 
@@ -81,11 +100,11 @@ function formatBall(ball?: Ball) {
 }
 
 export default function Home() {
-  const [deck, setDeck] = useState<Ball[]>(() => makeDeck());
+  const [deck, setDeck] = useState<Ball[]>(() => makeOrderedDeck());
   const [called, setCalled] = useState<Ball[]>([]);
-  const [card, setCard] = useState<number[]>(() => makeCard());
+  const [card, setCard] = useState<number[]>(() => makeStarterCard());
   const [marked, setMarked] = useState<Set<number>>(() => new Set([12]));
-  const [gameCode, setGameCode] = useState(() => randomInt(1000, 9999));
+  const [gameCode, setGameCode] = useState(1000);
 
   const calledNumbers = useMemo(
     () => new Set(called.map((ball) => ball.value)),
@@ -98,6 +117,10 @@ export default function Home() {
   );
   const latestBall = called[0];
   const progress = Math.round((called.length / 75) * 100);
+
+  useEffect(() => {
+    newGame();
+  }, []);
 
   function callNextNumber() {
     if (deck.length === 0) {
