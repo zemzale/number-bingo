@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import ConvexClientProvider from "./ConvexClientProvider";
 
 export const metadata: Metadata = {
   title: "Number Bingo",
-  description: "A quick online number bingo party game."
+  description: "A live two-player number bingo game."
 };
 
 export const viewport: Viewport = {
@@ -19,7 +20,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ConvexClientProvider>{children}</ConvexClientProvider>
+      </body>
     </html>
   );
 }

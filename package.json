@@ -3,12 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "convex dev --start \"next dev\"",
+    "dev:frontend": "next dev",
     "build": "next build",
+    "deploy:backend": "convex deploy",
     "start": "next start",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "convex": "^1.42.2",
     "next": "16.2.10",
     "react": "19.2.7",
     "react-dom": "19.2.7"
