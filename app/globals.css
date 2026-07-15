@@ -144,6 +144,18 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(8, 127, 10
 .boardToolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .boardToolbar h2 { margin: 0; font-size: 1.55rem; }
 .boardToolbar .panelLabel, .controlPanel .panelLabel { color: var(--muted); }
+.bingoCard { width: min(100%, 620px); margin: 0 auto; }
+.bingoHeader { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 8px; }
+.bingoHeader span {
+  display: grid;
+  place-items: center;
+  min-height: 46px;
+  color: #fff;
+  background: var(--ink);
+  border-radius: 8px;
+  font-size: clamp(1.25rem, 5vw, 2rem);
+  font-weight: 950;
+}
 .numberBoard { display: grid; grid-template-columns: repeat(5, minmax(48px, 1fr)); gap: 8px; }
 .numberCell {
   display: grid;
@@ -159,10 +171,29 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(8, 127, 10
 }
 .numberCell:hover:not(:disabled) { z-index: 1; transform: translateY(-2px); border-color: var(--accent); }
 .numberCell:disabled { cursor: default; }
+.numberCell:disabled:not(.called):not(.free) { opacity: .62; }
 .numberCell span { font-size: clamp(1.15rem, 4vw, 2rem); font-weight: 950; }
 .numberCell.selected { color: #fff; background: var(--signal); border-color: var(--signal); box-shadow: 0 0 0 3px rgba(232,93,63,.18); }
 .numberCell.called { color: #fff; background: var(--accent); border-color: var(--accent); }
+.numberCell.free { color: var(--ink); background: var(--gold); border-color: #d4a932; }
 .numberCell.winner { color: var(--ink); background: var(--gold); border-color: #d4a932; }
+
+.swipeHint { color: var(--muted); font-size: .78rem; font-weight: 800; }
+.cardCarousel { touch-action: pan-y; user-select: none; }
+.cardDots { display: flex; justify-content: center; gap: 8px; margin-top: 17px; }
+.cardDots span { width: 7px; height: 7px; background: #cbd0cd; border-radius: 999px; transition: width 140ms ease, background 140ms ease; }
+.cardDots span.active { width: 24px; background: var(--accent); }
+.cardDots span.affected { animation: affected-card 650ms ease-out; }
+@keyframes affected-card {
+  35% { background: var(--gold); box-shadow: 0 0 0 7px rgba(245, 201, 90, .25); }
+}
+.latestCall { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: -3px 0 16px; padding: 11px 14px; background: var(--green-soft); border-radius: 8px; }
+.latestCall span { color: var(--accent-dark); font-size: .82rem; font-weight: 800; }
+.latestCall strong { color: var(--accent-dark); font-size: 1.1rem; }
+.boardTurnState { margin: 0 0 16px; padding: 11px 14px; color: var(--muted); background: #f2f3f1; border: 1px solid var(--line); border-radius: 8px; font-size: .82rem; font-weight: 800; line-height: 1.4; }
+.boardTurnState.active { color: var(--accent-dark); background: var(--green-soft); border-color: rgba(8,127,109,.25); }
+.undealtCards { display: grid; min-height: 360px; place-content: center; gap: 8px; color: var(--muted); text-align: center; background: #f4f5f2; border: 1px dashed #cdd2ce; border-radius: 10px; }
+.undealtCards strong { color: var(--ink); font-size: 3rem; line-height: 1; }
 
 .controlPanel { display: grid; gap: 20px; }
 .controlPanel > .primaryButton { width: 100%; }
@@ -173,15 +204,31 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(8, 127, 10
 .turnNotice strong { color: var(--ink); }
 .turnNotice.active { background: var(--green-soft); border-color: rgba(8,127,109,.25); }
 .turnNotice.active span, .turnNotice.active strong { color: var(--accent-dark); }
-.history { display: grid; gap: 12px; }
+.history { display: block; }
+.history summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; list-style: none; }
+.history summary::-webkit-details-marker { display: none; }
+.history summary::after { content: "+"; color: var(--accent); font-weight: 950; }
+.history[open] summary::after { content: "−"; }
+.history summary .panelLabel { flex: 1; margin: 0; }
+.history .calledGrid { margin-top: 12px; }
 .historyHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .historyHeader .panelLabel { margin: 0; }
 .historyHeader strong { color: var(--muted); font-size: .85rem; }
-.calledGrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.calledGrid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 5px; }
 .calledGrid span { display: grid; place-items: center; min-height: 34px; color: #9aa19f; background: #f2f3f1; border-radius: 6px; font-size: .8rem; font-weight: 850; }
 .calledGrid span.called { color: #fff; background: var(--accent); }
 .rulesCard { padding-top: 18px; border-top: 1px solid var(--line); }
 .rulesCard p { margin: 0; color: var(--muted); font-size: .87rem; line-height: 1.6; }
+
+.revealPanel { margin-top: 22px; padding: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
+.revealPanel h2 { margin: 0 0 20px; }
+.revealedBoards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.revealedBoards h3 { margin: 0 0 8px; color: var(--muted); font-size: .85rem; }
+.bingoCard.compact .bingoHeader { gap: 4px; margin-bottom: 4px; }
+.bingoCard.compact .bingoHeader span { min-height: 30px; border-radius: 5px; font-size: 1rem; }
+.bingoCard.compact .numberBoard { gap: 4px; }
+.bingoCard.compact .numberCell { border-radius: 5px; }
+.bingoCard.compact .numberCell span { font-size: clamp(.78rem, 2vw, 1.2rem); }
 
 @media (max-width: 880px) {
   .welcomeShell, .gameHero, .gameLayout { grid-template-columns: 1fr; }
@@ -189,6 +236,7 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(8, 127, 10
   .welcomeHero h1 { font-size: clamp(4.7rem, 20vw, 8rem); }
   .controlPanel { grid-template-columns: 1fr 1fr; }
   .history, .rulesCard { grid-column: 1 / -1; }
+  .revealedBoards { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 560px) {
@@ -205,7 +253,12 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(8, 127, 10
   .boardToolbar { align-items: flex-start; flex-direction: column; }
   .boardToolbar .secondaryButton { width: 100%; }
   .numberBoard { gap: 5px; }
+  .bingoHeader { gap: 5px; margin-bottom: 5px; }
+  .bingoHeader span { min-height: 38px; border-radius: 6px; }
   .numberCell { border-radius: 6px; }
+  .numberCell span { font-size: clamp(1.05rem, 7vw, 1.55rem); }
   .controlPanel { grid-template-columns: 1fr; }
   .history, .rulesCard { grid-column: auto; }
+  .calledGrid { grid-template-columns: repeat(5, 1fr); }
+  .revealPanel { padding: 16px; }
 }

@@ -16,6 +16,8 @@ export default defineSchema({
     currentPlayerId: v.optional(v.id("players")),
     winnerPlayerId: v.optional(v.id("players")),
     isDraw: v.boolean(),
+    initialStartingSeat: v.optional(v.number()),
+    lastCallerId: v.optional(v.id("players")),
     selectedNumbers: v.array(v.number()),
     turnNumber: v.number(),
     round: v.number(),
@@ -27,6 +29,7 @@ export default defineSchema({
     name: v.string(),
     seat: v.number(),
     board: v.optional(v.array(v.number())),
+    boards: v.optional(v.array(v.array(v.number()))),
     ready: v.boolean(),
     rematchReady: v.boolean(),
   })

@@ -1,24 +1,16 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../convex/_generated/api";
-import { WIN_LINES } from "../convex/gameLogic";
+import { completedLines, FREE_SPACE, WIN_LINES } from "../convex/gameLogic";
 
 type Session = { code: string; playerToken: string };
 type Mode = "create" | "join";
 
 const SESSION_KEY = "number-bingo-session";
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-function shuffledBoard() {
-  const board = Array.from({ length: 25 }, (_, index) => index + 1);
-  for (let index = board.length - 1; index > 0; index -= 1) {
-    const swapIndex = crypto.getRandomValues(new Uint32Array(1))[0] % (index + 1);
-    [board[index], board[swapIndex]] = [board[swapIndex], board[index]];
-  }
-  return board;
-}
+const BINGO_LETTERS = ["B", "I", "N", "G", "O"];
 
 function randomCode() {
   const values = crypto.getRandomValues(new Uint32Array(6));
@@ -37,10 +29,21 @@ function errorMessage(error: unknown) {
   return "Something went wrong. Please try again.";
 }
 
+function bingoLabel(number: number) {
+  if (number === FREE_SPACE) return "Free";
+  return `${BINGO_LETTERS[Math.floor((number - 1) / 15)]}-${number}`;
+}
+
 function winningCells(board: number[], selectedNumbers: number[]) {
+  return new Set<number>(completedLines(board, selectedNumbers).flat());
+}
+
+function boardProgress(board: number[], selectedNumbers: number[]) {
   const selected = new Set(selectedNumbers);
-  return new Set<number>(
-    WIN_LINES.filter((line) => line.every((index) => selected.has(board[index]))).flat()
+  return Math.max(
+    ...WIN_LINES.map((line) =>
+      line.filter((index) => board[index] === FREE_SPACE || selected.has(board[index])).length
+    )
   );
 }
 
@@ -89,7 +92,6 @@ function Welcome({ onConnected }: { onConnected: (session: Session) => void }) {
     setError("");
     setBusy(true);
     const playerToken = randomToken();
-
     try {
       if (mode === "create") {
         for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -117,126 +119,127 @@ function Welcome({ onConnected }: { onConnected: (session: Session) => void }) {
   return (
     <main className="welcomeShell">
       <section className="welcomeHero">
-        <p className="eyebrow">Two players · two boards · one winner</p>
+        <p className="eyebrow">Two players · four cards each · one winner</p>
         <h1>Number<br />Bingo</h1>
-        <p>Arrange 1–25, take turns calling numbers, and complete five lines first.</p>
+        <p>Take turns calling numbers from your cards. Complete a bingo before your opponent.</p>
       </section>
-
       <section className="joinCard">
         <div className="modeTabs" aria-label="Room action">
           <button className={mode === "create" ? "active" : ""} onClick={() => setMode("create")} type="button">Create room</button>
           <button className={mode === "join" ? "active" : ""} onClick={() => setMode("join")} type="button">Join room</button>
         </div>
         <form onSubmit={submit}>
-          <label>
-            Your name
-            <input maxLength={24} onChange={(event) => setName(event.target.value)} placeholder="Player name" required value={name} />
-          </label>
-          {mode === "join" && (
-            <label>
-              Room code
-              <input className="codeInput" maxLength={6} onChange={(event) => setCode(event.target.value.toUpperCase())} pattern="[A-Za-z2-9]{6}" placeholder="ABC234" required value={code} />
-            </label>
-          )}
+          <label>Your name<input maxLength={24} onChange={(event) => setName(event.target.value)} placeholder="Player name" required value={name} /></label>
+          {mode === "join" && <label>Room code<input className="codeInput" maxLength={6} onChange={(event) => setCode(event.target.value.toUpperCase())} pattern="[A-Za-z2-9]{6}" placeholder="ABC234" required value={code} /></label>}
           {error && <p className="errorMessage" role="alert">{error}</p>}
-          <button className="primaryButton" disabled={busy} type="submit">
-            {busy ? "Connecting…" : mode === "create" ? "Create a room" : "Join the game"}
-          </button>
+          <button className="primaryButton" disabled={busy} type="submit">{busy ? "Connecting…" : mode === "create" ? "Create a room" : "Join the game"}</button>
         </form>
       </section>
     </main>
   );
 }
 
+function BingoCard({
+  board,
+  selectedNumbers,
+  disabled,
+  onCall,
+  compact = false,
+}: {
+  board: number[];
+  selectedNumbers: number[];
+  disabled: boolean;
+  onCall?: (number: number) => void;
+  compact?: boolean;
+}) {
+  const winning = useMemo(() => winningCells(board, selectedNumbers), [board, selectedNumbers]);
+  return (
+    <div className={compact ? "bingoCard compact" : "bingoCard"}>
+      <div className="bingoHeader" aria-hidden="true">{BINGO_LETTERS.map((letter) => <span key={letter}>{letter}</span>)}</div>
+      <div className="numberBoard">
+        {board.map((number, index) => {
+          const called = number === FREE_SPACE || selectedNumbers.includes(number);
+          return (
+            <button
+              aria-label={number === FREE_SPACE ? "Free space" : `${bingoLabel(number)}${called ? ", called" : ""}`}
+              aria-pressed={called}
+              className={["numberCell", called ? "called" : "", number === FREE_SPACE ? "free" : "", winning.has(index) ? "winner" : ""].filter(Boolean).join(" ")}
+              disabled={disabled || called || number === FREE_SPACE || !onCall}
+              key={`${number}-${index}`}
+              onClick={() => onCall?.(number)}
+              type="button"
+            >
+              <span>{number === FREE_SPACE ? "★" : number}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function Game({ session, onLeave }: { session: Session; onLeave: () => void }) {
   const game = useQuery(api.game.getGame, session);
-  const submitBoard = useMutation(api.game.submitBoard);
+  const readyUp = useMutation(api.game.readyUp);
   const selectNumber = useMutation(api.game.selectNumber);
   const requestRematch = useMutation(api.game.requestRematch);
-  const [board, setBoard] = useState<number[]>([]);
-  const [selectedCell, setSelectedCell] = useState<number | null>(null);
+  const [activeCard, setActiveCard] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const suppressCall = useRef(false);
 
   useEffect(() => {
-    if (game && !game.me.ready && board.length === 0) setBoard(shuffledBoard());
-  }, [game, board.length]);
-
-  const activeBoard = game?.me.board ?? board;
-  const winning = useMemo(
-    () => winningCells(activeBoard, game?.selectedNumbers ?? []),
-    [activeBoard, game?.selectedNumbers]
-  );
+    setActiveCard(0);
+  }, [game?.round]);
 
   if (game === undefined) return <main className="loadingShell">Joining room…</main>;
-  if (game === null) {
-    return <main className="loadingShell"><p>That room no longer exists.</p><button className="secondaryButton" onClick={onLeave}>Return home</button></main>;
-  }
+  if (game === null) return <main className="loadingShell"><p>That room no longer exists.</p><button className="secondaryButton" onClick={onLeave}>Return home</button></main>;
+  const currentGame = game;
 
-  function swapCell(index: number) {
-    if (game!.me.ready) return;
-    if (selectedCell === null) {
-      setSelectedCell(index);
-      return;
-    }
-    const next = [...board];
-    [next[selectedCell], next[index]] = [next[index], next[selectedCell]];
-    setBoard(next);
-    setSelectedCell(null);
-  }
-
-  async function lockBoard() {
-    setBusy(true);
-    setError("");
-    try {
-      await submitBoard({ ...session, board });
-    } catch (caught) {
-      setError(errorMessage(caught));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function callNumber(number: number) {
-    if (!game!.isMyTurn || game!.selectedNumbers.includes(number)) return;
-    setBusy(true);
-    setError("");
-    try {
-      await selectNumber({ ...session, number });
-    } catch (caught) {
-      setError(errorMessage(caught));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function rematch() {
-    setBusy(true);
-    setError("");
-    try {
-      await requestRematch(session);
-      setBoard([]);
-      setSelectedCell(null);
-    } catch (caught) {
-      setError(errorMessage(caught));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function copyCode() {
-    await navigator.clipboard.writeText(game!.code);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
-  }
-
+  const boards = game.me.boards;
+  const activeBoard = boards[activeCard];
   const arranging = game.status === "waiting" || game.status === "arranging";
   const finished = game.status === "finished";
   const boardTitle = arranging
-    ? game.me.ready ? "Board locked" : selectedCell === null ? "Arrange your board" : "Choose a number to swap"
+    ? game.me.ready ? "Cards dealt" : "Ready for four cards?"
     : finished ? game.isDraw ? "It’s a draw" : game.winner === game.me.name ? "You win!" : `${game.winner} wins`
     : game.isMyTurn ? "Choose a number" : `Waiting for ${game.opponent?.name ?? "opponent"}`;
+
+  async function mutate(action: () => Promise<unknown>) {
+    setBusy(true);
+    setError("");
+    try {
+      await action();
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function callNumber(number: number) {
+    if (suppressCall.current || !currentGame.isMyTurn || currentGame.selectedNumbers.includes(number)) return;
+    void mutate(() => selectNumber({ ...session, number }));
+  }
+
+  function finishSwipe(clientX: number, clientY: number) {
+    if (!touchStart.current) return;
+    const deltaX = clientX - touchStart.current.x;
+    const deltaY = clientY - touchStart.current.y;
+    touchStart.current = null;
+    if (Math.abs(deltaX) < 45 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+    suppressCall.current = true;
+    setActiveCard((current) => Math.max(0, Math.min(3, current + (deltaX < 0 ? 1 : -1))));
+    window.setTimeout(() => { suppressCall.current = false; }, 250);
+  }
+
+  async function copyCode() {
+    await navigator.clipboard.writeText(currentGame.code);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  }
 
   return (
     <main className="shell">
@@ -250,58 +253,79 @@ function Game({ session, onLeave }: { session: Session; onLeave: () => void }) {
         <div>
           <p className="eyebrow">{game.status === "playing" ? `Turn ${game.turnNumber + 1}` : game.status}</p>
           <h1>{boardTitle}</h1>
-          <p>{arranging ? "Tap any two cells to swap them. Lock your arrangement when it feels right." : "Every called number is marked on both boards. First to five completed lines wins."}</p>
+          <p>{arranging ? "Four standard 75-ball cards are dealt automatically." : "Swipe between your cards and call an open number. Every match is marked automatically."}</p>
         </div>
         <div className="scoreCard">
-          <div className="playerScore isMe"><span>{game.me.name} · You</span><strong>{game.me.completedLines}<small>/5</small></strong></div>
+          <div className="playerScore isMe"><span>{game.me.name} · You</span><strong>{game.me.bestLineProgress}<small>/5</small></strong></div>
           <div className="scoreDivider">VS</div>
-          <div className="playerScore"><span>{game.opponent?.name ?? "Waiting for player 2"}</span><strong>{game.opponent?.completedLines ?? 0}<small>/5</small></strong></div>
+          <div className="playerScore"><span>{game.opponent?.name ?? "Waiting for player 2"}</span><strong>{game.opponent?.bestLineProgress ?? 0}<small>/5</small></strong></div>
         </div>
       </section>
 
       <section className="gameLayout">
         <div className="boardPanel">
           <div className="boardToolbar">
-            <div><span className="panelLabel">Your 5 × 5 grid</span><h2>{boardTitle}</h2></div>
-            {!game.me.ready && arranging && <button className="secondaryButton" onClick={() => { setBoard(shuffledBoard()); setSelectedCell(null); }} type="button">Shuffle</button>}
+            <div><span className="panelLabel">Your cards</span><h2>{activeBoard ? `Card ${activeCard + 1} · ${boardProgress(activeBoard, game.selectedNumbers)}/5` : boardTitle}</h2></div>
+            {activeBoard && <span className="swipeHint">Swipe to change card</span>}
           </div>
-          <div className="numberBoard">
-            {activeBoard.map((number, index) => {
-              const called = game.selectedNumbers.includes(number);
-              return (
-                <button
-                  aria-label={`${number}${called ? ", called" : ""}`}
-                  aria-pressed={selectedCell === index || called}
-                  className={["numberCell", selectedCell === index ? "selected" : "", called ? "called" : "", winning.has(index) ? "winner" : ""].filter(Boolean).join(" ")}
-                  disabled={busy || (arranging && game.me.ready) || (game.status === "playing" && (!game.isMyTurn || called)) || finished}
-                  key={`${number}-${index}`}
-                  onClick={() => arranging ? swapCell(index) : callNumber(number)}
-                  type="button"
-                >
-                  <span>{number}</span>
-                </button>
-              );
-            })}
-          </div>
+
+          {game.latestCall && <div className="latestCall"><span>{game.latestCall.isMe ? "You called" : `${game.latestCall.callerName} called`}</span><strong>{bingoLabel(game.latestCall.number)}</strong></div>}
+
+          {activeBoard && !finished && (
+            <div className={`boardTurnState ${game.status === "playing" && game.isMyTurn ? "active" : ""}`}>
+              {game.status === "playing"
+                ? game.isMyTurn
+                  ? "Your turn · Tap any open number"
+                  : `Waiting for ${game.opponent?.name ?? "your opponent"} · Numbers unlock on your turn`
+                : game.opponent
+                  ? `Waiting for ${game.opponent.name} to get ready`
+                  : "Waiting for player 2 · Share the room code to start"}
+            </div>
+          )}
+
+          {activeBoard ? (
+            <div
+              className="cardCarousel"
+              onPointerDown={(event) => {
+                touchStart.current = { x: event.clientX, y: event.clientY };
+              }}
+              onPointerUp={(event) => finishSwipe(event.clientX, event.clientY)}
+              onPointerCancel={() => { touchStart.current = null; }}
+            >
+              <BingoCard board={activeBoard} selectedNumbers={game.selectedNumbers} disabled={busy || !game.isMyTurn || finished || arranging} onCall={callNumber} />
+            </div>
+          ) : (
+            <div className="undealtCards"><strong>4 cards</strong><span>75-ball bingo · free center</span></div>
+          )}
+
+          {activeBoard && <div className="cardDots" aria-label={`Card ${activeCard + 1} of 4`}>{boards.map((card, index) => {
+            const affected = game.latestCall !== null && card.includes(game.latestCall.number);
+            return <span className={[index === activeCard ? "active" : "", affected ? "affected" : ""].filter(Boolean).join(" ")} key={`${index}-${game.latestCall?.number ?? "none"}`} />;
+          })}</div>}
           {error && <p className="errorMessage" role="alert">{error}</p>}
         </div>
 
         <aside className="controlPanel">
-          {arranging && !game.me.ready && <button className="primaryButton" disabled={busy || board.length !== 25} onClick={lockBoard} type="button">{busy ? "Locking…" : "Lock my board"}</button>}
-          {arranging && game.me.ready && <div className="statusNotice"><span className="statusDot" />{game.opponent ? game.opponent.ready ? "Starting game…" : `Waiting for ${game.opponent.name} to lock their board` : "Share the room code with player 2"}</div>}
-          {game.status === "playing" && <div className={`turnNotice ${game.isMyTurn ? "active" : ""}`}><span>{game.isMyTurn ? "Your turn" : "Opponent’s turn"}</span><strong>{game.isMyTurn ? "Select any open number" : "The board updates automatically"}</strong></div>}
-          {finished && <button className="primaryButton" disabled={busy || game.me.rematchReady} onClick={rematch} type="button">{game.me.rematchReady ? "Waiting for opponent…" : "Play again"}</button>}
+          {arranging && !game.me.ready && <button className="primaryButton" disabled={busy} onClick={() => void mutate(() => readyUp(session))} type="button">{busy ? "Dealing…" : "Deal my cards"}</button>}
+          {arranging && game.me.ready && <div className="statusNotice"><span className="statusDot" />{game.opponent ? game.opponent.ready ? "Starting game…" : `Waiting for ${game.opponent.name} to get ready` : "Share the room code with player 2"}</div>}
+          {game.status === "playing" && <div className={`turnNotice ${game.isMyTurn ? "active" : ""}`}><span>{game.isMyTurn ? "Your turn" : "Opponent’s turn"}</span><strong>{game.isMyTurn ? "Tap any open number on this card" : "Your cards update automatically"}</strong></div>}
+          {finished && <button className="primaryButton" disabled={busy || game.me.rematchReady} onClick={() => void mutate(() => requestRematch(session))} type="button">{game.me.rematchReady ? "Waiting for opponent…" : "Play again"}</button>}
 
-          <div className="history">
-            <div className="historyHeader"><span className="panelLabel">Numbers called</span><strong>{game.selectedNumbers.length}/25</strong></div>
-            <div className="calledGrid">
-              {Array.from({ length: 25 }, (_, index) => index + 1).map((number) => <span className={game.selectedNumbers.includes(number) ? "called" : ""} key={number}>{number}</span>)}
-            </div>
-          </div>
-
-          <div className="rulesCard"><span className="panelLabel">How to win</span><p>Complete any five rows, columns, or diagonals before your opponent. If both reach five on the same call, the round is a draw.</p></div>
+          <details className="history">
+            <summary><span className="panelLabel">Numbers called</span><strong>{game.selectedNumbers.length}/75</strong></summary>
+            <div className="calledGrid">{Array.from({ length: 75 }, (_, index) => index + 1).map((number) => <span className={game.selectedNumbers.includes(number) ? "called" : ""} key={number}>{number}</span>)}</div>
+          </details>
+          <div className="rulesCard"><span className="panelLabel">How to win</span><p>Complete one row, column, or diagonal on any card. The free center is already marked.</p></div>
         </aside>
       </section>
+
+      {finished && game.opponent?.boards && (
+        <section className="revealPanel">
+          <span className="panelLabel">Round reveal</span>
+          <h2>{game.opponent.name}’s cards</h2>
+          <div className="revealedBoards">{game.opponent.boards.map((board, index) => <div key={index}><h3>Card {index + 1}</h3><BingoCard board={board} selectedNumbers={game.selectedNumbers} disabled compact /></div>)}</div>
+        </section>
+      )}
     </main>
   );
 }

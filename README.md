@@ -4,11 +4,11 @@ A realtime, two-player Number Bingo game built with Next.js and Convex.
 
 ## Rules
 
-Each player arranges every number from 1 through 25 on a 5 × 5 board. Players
-take turns selecting an unused number, which is marked on both boards. Rows,
-columns, and the two diagonals count as completed lines. The first player to
-complete five lines wins; if both players reach five on the same call, the
-round is a draw.
+Each player is dealt four standard 75-ball bingo cards with a free center.
+Players take turns calling an unused number by tapping it on one of their own
+cards. The number is automatically marked everywhere it appears. The first
+player to complete a row, column, or diagonal on any card wins; if the same
+call gives both players bingo, the round is a draw.
 
 ## Local development
 
